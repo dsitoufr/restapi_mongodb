@@ -1,0 +1,132 @@
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"math/rand"
+	"net/http"
+	"strconv"
+
+	"github.com/gorilla/mux"
+)
+
+// product model
+type Product struct {
+	ID          string    `json:"id"`
+	ProductName string    `json:"prodname"`
+	UnitPrice   string    `json:"prodprice"`
+	Supplier    *Supplier `json:"supplier"`
+}
+
+// supplier model
+type Supplier struct {
+	Name    string `json:"name"`
+	Country string `json:"country"`
+}
+
+//list of products
+var products []Product
+
+// Get one single product
+func getOneProduct(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(request) //get product id
+
+	for _, product := range products {
+		if product.ID == params["id"] {
+			json.NewEncoder(response).Encode(product)
+			return
+		}
+	}
+	json.NewEncoder(response).Encode(&Product{})
+}
+
+// Get all products
+func getAllProducts(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(response).Encode(products)
+}
+
+//create new product
+func newProduct(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var product Product
+	_ = json.NewDecoder(r.Body).Decode(&product)
+
+	//log.Println("product decoded")
+	product.ID = strconv.Itoa(rand.Intn(100000000)) // Mock ID - not safe
+	products = append(products, product)
+	json.NewEncoder(w).Encode(product)
+}
+
+// Update Product
+func updateProduct(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json")
+
+	params := mux.Vars(request)
+	for index, product := range products {
+		if product.ID == params["id"] {
+
+			//delete the product in the slice
+			products = append(products[:index], products[index+1:]...)
+
+			//get the new product
+			var product Product
+			_ = json.NewDecoder(request.Body).Decode(&product)
+
+			//update with old id
+			product.ID = params["id"]
+
+			//append new product in slice
+			products = append(products, product)
+			json.NewEncoder(response).Encode(product)
+			return
+		}
+	}
+}
+
+// Delete Product
+func deleteProduct(response http.ResponseWriter, request *http.Request) {
+	response.Header().Set("Content-Type", "application/json")
+
+	params := mux.Vars(request)
+	for index, product := range products {
+		if product.ID == params["id"] {
+
+			//delete the product in the slice
+			products = append(products[:index], products[index+1:]...)
+			json.NewEncoder(response).Encode(product)
+			break
+		}
+	}
+
+	json.NewEncoder(response).Encode(products)
+}
+
+// Main function
+func main() {
+	// Init router
+	router := mux.NewRouter()
+
+	// Hardcoded data - @todo: add database
+	//books = append(books, Book{ID: "1", Isbn: "438227", Title: "Book One", Author: &Author{Firstname: "John", Lastname: "Doe"}})
+	//books = append(books, Book{ID: "2", Isbn: "454555", Title: "Book Two", Author: &Author{Firstname: "Steve", Lastname: "Smith"}})
+
+	// Route handles & endpoints
+
+	router.HandleFunc("/api/product", newProduct).Methods("POST")
+	router.HandleFunc("/api/product/{id}", deleteProduct).Methods("DELETE")
+	router.HandleFunc("/api/product/{id}", getOneProduct).Methods("GET")
+	router.HandleFunc("/api/products", getAllProducts).Methods("GET")
+	router.HandleFunc("/api/product/{id}", updateProduct).Methods("PUT")
+
+	// Start server
+	log.Println("starting server")
+	log.Fatal(http.ListenAndServe(":8000", router))
+}
+
+//{
+//	"prodname":"table",
+//	"prodprice":"1500",
+//	"supplier":{"name":"Harry","country":"USA"}
+//}
